@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>聽音成譜 · 音樂 → 簡譜</title>
+<meta name="theme-color" content="#101318">
+<style>
+  :root{
+    --bg:#0d1015; --panel:#151a22; --panel2:#1b222c; --line:#26303d;
+    --ink:#e9eef6; --muted:#8b9bb4; --accent:#5ee0b0; --accent2:#7aa2ff;
+    --warn:#ffb454; --err:#ff6b6b;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:radial-gradient(1200px 600px at 50% -10%, #1b2431 0%, var(--bg) 60%);
+    color:var(--ink); min-height:100vh;
+    font-family:-apple-system,BlinkMacSystemFont,"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:860px;margin:0 auto;padding:22px 16px 64px}
+  header h1{font-size:22px;margin:0 0 6px;letter-spacing:.5px}
+  header h1 span{color:var(--accent)}
+  header p{margin:0;color:var(--muted);font-size:13px;line-height:1.6}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;margin-top:16px}
+  .card h2{font-size:13px;margin:0 0 12px;color:var(--muted);font-weight:600;letter-spacing:1.5px}
+
+  .drop{
+    border:1.5px dashed #33404f;border-radius:14px;padding:26px 16px;text-align:center;
+    transition:.18s;cursor:pointer;background:var(--panel2)
+  }
+  .drop:hover,.drop.over{border-color:var(--accent);background:#1d2a2b}
+  .drop .big{font-size:30px;line-height:1;margin-bottom:8px}
+  .drop .t{font-size:14px;margin-bottom:4px}
+  .drop .s{font-size:12px;color:var(--muted)}
+
+  .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  button{
+    font:inherit;font-size:13px;padding:9px 14px;border-radius:10px;cursor:pointer;
+    border:1px solid var(--line);background:var(--panel2);color:var(--ink);transition:.15s;
+  }
+  button:hover:not(:disabled){border-color:#3d4d61;background:#212b37}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  button.primary{background:linear-gradient(180deg,#5ee0b0,#3ec594);color:#06231a;border:0;font-weight:700}
+  button.primary:hover:not(:disabled){filter:brightness(1.06)}
+  button.rec.on{background:#3a1c22;border-color:#7d3040;color:#ffb3c0}
+  .chip{font-size:12px;padding:7px 11px;border-radius:999px;background:#1e2836;border:1px solid var(--line)}
+  .chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+
+  .ctrls{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+  label.f{display:block;font-size:11px;color:var(--muted);margin-bottom:5px;letter-spacing:.5px}
+  select,input[type=number]{
+    width:100%;font:inherit;font-size:14px;padding:8px 10px;border-radius:9px;
+    background:var(--panel2);border:1px solid var(--line);color:var(--ink)
+  }
+
+  .status{margin-top:12px;font-size:13px;color:var(--muted);min-height:20px;display:flex;align-items:center;gap:8px}
+  .status.err{color:var(--err)}
+  .spin{width:13px;height:13px;border:2px solid #2c3949;border-top-color:var(--accent);border-radius:50%;animation:sp .7s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+
+  /* ---------- 樂譜 ---------- */
+  .score{background:#0f141b;border:1px solid var(--line);border-radius:14px;padding:16px 12px;overflow-x:auto}
+  .score-head{display:flex;gap:18px;align-items:baseline;flex-wrap:wrap;font-size:13px;color:var(--muted);padding:0 6px 12px;border-bottom:1px solid #1e2833}
+  .score-head b{color:var(--ink);font-size:15px;letter-spacing:.5px}
+  .measures{display:flex;flex-wrap:wrap;align-items:flex-end;row-gap:26px;padding:14px 2px 2px}
+  .measure{display:inline-flex;align-items:flex-end;padding:0 10px 0 6px;border-right:2px solid #33404f;min-height:52px}
+  .measure.first{padding-left:0;border-left:2px solid #33404f}
+  .cell{display:inline-flex;align-items:flex-end;padding:0 1px 6px;line-height:1;margin-right:calc(1px + min(15px, var(--b, 1) * 11px))}
+  .glyph{display:inline-flex;flex-direction:column;align-items:center;padding:0 5px}
+  .glyph .oct,.glyph .octb{width:100%;height:9px;font-size:9px;display:flex;align-items:center;justify-content:center;letter-spacing:.5px;color:var(--accent)}
+  .glyph .num{font-size:25px;font-weight:600;min-width:24px;text-align:center;font-variant-numeric:tabular-nums}
+  .cell.rest .num{color:var(--muted)}
+  .cell.hold .num{color:#c3cedd}
+  /* 連桁：底線用 rowcells 的 border-bottom，必然在音符與八度點之下 */
+  .grp{display:inline-flex}
+  .grp .rowcells{display:inline-flex;align-items:flex-end;position:relative;padding-bottom:5px;border-bottom:2px solid var(--accent2)}
+  .grp .cell{padding-bottom:0}
+  .grp.u2 .rowcells{padding-bottom:9px}
+  .grp.u2 .rowcells::after{content:'';position:absolute;left:0;right:0;bottom:-4px;height:2px;background:var(--accent2);border-radius:1px}
+  @media (max-width:560px){
+    .glyph{padding:0 3px}
+    .glyph .num{font-size:21px;min-width:19px}
+    .cell{margin-right:calc(0px + min(9px, var(--b, 1) * 6px))}
+    .measure{padding:0 7px 0 4px;min-height:44px}
+    .measures{row-gap:14px;padding-top:10px}
+    .cell .oct,.cell .octb{font-size:8px;height:8px}
+  }
+  .score-foot{margin-top:10px;font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap;padding:0 6px}
+  .emptynote{color:var(--muted);font-size:13px;padding:18px 6px}
+
+  canvas{width:100%;height:74px;display:block;border-radius:10px;background:#0f141b;border:1px solid var(--line)}
+  .hint{font-size:12px;color:var(--muted);line-height:1.65;margin-top:10px}
+  .hint b{color:var(--warn)}
+  .fileonly{display:none;background:#3a2a12;border:1px solid #6b4a14;color:#ffcc80;padding:10px 12px;border-radius:10px;font-size:13px;margin-bottom:12px}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;white-space:pre-wrap;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>聽音成譜 · <span>音樂 → 簡譜</span></h1>
+    <p>上傳一段旋律（或直接哼幾句），自動偵測音高、定調、估拍速，排成簡譜。</p>
+  </header>
+
+  <div class="fileonly" id="filewarn">⚠️ 你係用 file:// 開，瀏覽器會封鎖模組載入。請用 <code>python3 -m http.server</code> 或線上版開啟。</div>
+
+  <section class="card">
+    <h2>1 · 音源</h2>
+    <div class="drop" id="drop">
+      <div class="big">🎵</div>
+      <div class="t">拖一個音檔入嚟，或者點一下揀檔</div>
+      <div class="s">wav · mp3 · m4a · ogg · flac（建議 5–60 秒）</div>
+    </div>
+    <input type="file" id="file" accept="audio/*" hidden>
+    <div class="row">
+      <button id="recBtn">🎙 錄音</button>
+      <button id="stopRec" disabled>■ 停止錄音</button>
+      <button id="fileBtn">📁 揀檔案</button>
+    </div>
+    <div class="chips" id="demos">
+      <button class="chip" data-demo="twinkle">示範：小星星</button>
+      <button class="chip" data-demo="birthday">示範：生日快樂</button>
+      <button class="chip" data-demo="frere">示範：兩隻老虎</button>
+    </div>
+    <div class="hint">👉 只可靠 <b>單聲部旋律</b>（哼唱、口哨、笛、小提琴、單音結他）。有鼓、和弦、成隊樂隊嘅歌，暫時會亂。</div>
+  </section>
+
+  <section class="card">
+    <h2>2 · 記譜設定</h2>
+    <div class="ctrls">
+      <div><label class="f">主音 1 =</label><select id="key"></select></div>
+      <div><label class="f">拍號</label>
+        <select id="meter">
+          <option value="4">4 / 4</option><option value="3">3 / 4</option>
+          <option value="2">2 / 4</option><option value="6">6 / 8</option>
+        </select>
+      </div>
+      <div><label class="f">速度 ♩=</label><input type="number" id="bpm" min="40" max="220" step="1" value="100"></div>
+      <div><label class="f">最小音符</label>
+        <select id="grid">
+          <option value="0.25">十六分音符</option>
+          <option value="0.5">八分音符</option>
+          <option value="1">四分音符</option>
+        </select>
+      </div>
+    </div>
+    <div class="status" id="status">等緊音源…</div>
+  </section>
+
+  <section class="card" id="resultCard" hidden>
+    <h2>3 · 簡譜</h2>
+    <div class="score">
+      <div class="score-head">
+        <span>1 = <b id="hKey">C</b></span>
+        <span id="hMeter">4 / 4</span>
+        <span>♩ = <b id="hBpm">100</b></span>
+        <span id="hKeyName" style="color:#6f7f95"></span>
+      </div>
+      <div class="measures" id="measures"></div>
+      <div class="score-foot">
+        <span id="fNotes"></span><span id="fBars"></span><span id="fDur"></span>
+      </div>
+    </div>
+    <div class="row">
+      <button class="primary" id="playBtn">▶ 播放簡譜</button>
+      <button id="copyBtn">複製文字簡譜</button>
+      <button id="dlBtn">下載 .txt</button>
+    </div>
+    <canvas id="roll"></canvas>
+    <div class="hint">上面條帶係系統「聽」到嘅音高（每條 = 一粒音）。同你印象唔同就係嗰段偵測錯，可以調 <b>最小音符</b> 或者再錄一次。</div>
+  </section>
+</div>
+
+<script>
+  if (location.protocol === 'file:') document.getElementById('filewarn').style.display = 'block';
+</script>
+<script type="module">
+import { transcribe, relayout, synthMelody, toPlainText } from './jianpu.js';
+
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const $ = (id) => document.getElementById(id);
+
+const DEMOS = {
+  twinkle: [[60,1],[60,1],[67,1],[67,1],[69,1],[69,1],[67,2],[65,1],[65,1],[64,1],[64,1],[62,1],[62,1],[60,2]],
+  birthday: [[67,.5],[67,.5],[69,1],[67,1],[72,1],[71,2],
+             [67,.5],[67,.5],[69,1],[67,1],[74,1],[72,2],
+             [67,.5],[67,.5],[79,1],[76,1],[72,1],[71,1],[69,1],
+             [77,.5],[77,.5],[76,1],[72,1],[74,1],[72,2]],
+  frere: [[60,1],[62,1],[64,1],[60,1],[60,1],[62,1],[64,1],[60,1],
+          [64,1],[65,1],[67,2],[64,1],[65,1],[67,2],
+          [67,.5],[69,.5],[67,.5],[65,.5],[64,1],[60,1],
+          [67,.5],[69,.5],[67,.5],[65,.5],[64,1],[60,1],
+          [60,1],[67,1],[60,2]],
+};
+
+let result = null;         // 完整分析結果
+let audioCtx = null;
+let playing = null;
+let mediaRecorder = null, recChunks = [], activeStream = null;
+
+/* ---------- 狀態 ---------- */
+function setStatus(msg, kind = '') {
+  const el = $('status');
+  el.className = 'status ' + kind;
+  el.innerHTML = kind === 'busy' ? `<span class="spin"></span><span>${msg}</span>` : msg;
+}
+
+/* ---------- 音源解碼 ---------- */
+function toMono(buffer) {
+  const l = buffer.getChannelData(0);
+  if (buffer.numberOfChannels === 1) return Float32Array.from(l);
+  const r = buffer.getChannelData(1);
+  const out = new Float32Array(l.length);
+  for (let i = 0; i < l.length; i++) out[i] = (l[i] + r[i]) / 2;
+  return out;
+}
+
+const MAX_SECONDS = 75;   // 分析上限，避免長歌卡住 UI
+
+async function analyzeSamples(samples, sr, label) {
+  setStatus('分析中… 偵測音高', 'busy');
+  await new Promise((r) => setTimeout(r, 40));
+  let clipped = '';
+  if (samples.length / sr > MAX_SECONDS) {
+    samples = samples.slice(0, Math.floor(MAX_SECONDS * sr));
+    clipped = `（只分析頭 ${MAX_SECONDS} 秒）`;
+  }
+  try {
+    const t0 = performance.now();
+    const opts = { beatsPerBar: Number($('meter').value) === 6 ? 3 : Number($('meter').value) };
+    const res = transcribe(samples, sr, opts);
+    result = res;
+    $('key').value = String(res.key.tonicPc);
+    $('bpm').value = Math.round(res.tempo.bpm);
+    $('meter').value = String(Number($('meter').value));
+    $('resultCard').hidden = false;
+    render();
+    const ms = Math.max(1, Math.round(performance.now() - t0));
+    setStatus(`${label} · 認到 ${res.notes.length} 粒音 · ${ms}ms${clipped}`);
+  } catch (e) {
+    console.error(e);
+    result = null;
+    $('resultCard').hidden = true;
+    setStatus('失敗：' + (e.message || e), 'err');
+  }
+}
+
+async function decodeAndAnalyze(arrayBuffer, label) {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  setStatus('解碼 ' + label, 'busy');
+  try {
+    const buf = await audioCtx.decodeAudioData(arrayBuffer);
+    await analyzeSamples(toMono(buf), buf.sampleRate, label);
+  } catch (e) {
+    setStatus('解碼失敗：' + (e.message || e), 'err');
+  }
+}
+
+/* ---------- 輸入 ---------- */
+const drop = $('drop'), fileInput = $('file');
+drop.addEventListener('click', () => fileInput.click());
+$('fileBtn').addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', async () => {
+  const f = fileInput.files[0];
+  if (!f) return;
+  drop.querySelector('.t').textContent = f.name;
+  drop.querySelector('.s').textContent = (f.size / 1024 / 1024).toFixed(1) + ' MB';
+  await decodeAndAnalyze(await f.arrayBuffer(), f.name);
+});
+['dragenter', 'dragover'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', async (e) => {
+  const f = e.dataTransfer.files[0];
+  if (!f) return;
+  drop.querySelector('.t').textContent = f.name;
+  await decodeAndAnalyze(await f.arrayBuffer(), f.name);
+});
+
+$('recBtn').addEventListener('click', async () => {
+  try {
+    activeStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    recChunks = [];
+    mediaRecorder = new MediaRecorder(activeStream);
+    mediaRecorder.ondataavailable = (e) => e.data.size && recChunks.push(e.data);
+    mediaRecorder.onstop = async () => {
+      activeStream.getTracks().forEach((t) => t.stop());
+      const blob = new Blob(recChunks, { type: recChunks[0]?.type || 'audio/webm' });
+      setStatus('錄音完成，分析中…', 'busy');
+      await decodeAndAnalyze(await blob.arrayBuffer(), '錄音');
+    };
+    mediaRecorder.start();
+    $('recBtn').classList.add('on');
+    $('recBtn').textContent = '● 錄音中…';
+    $('stopRec').disabled = false;
+    setStatus('錄緊音，唱完或者吹完就按停止');
+  } catch (e) {
+    const msg = window.isSecureContext
+      ? '開唔到麥克風：' + (e.message || e)
+      : '麥克風只可以用 localhost 或 https 開；用內網 IP 就用「揀檔案」上傳';
+    setStatus(msg, 'err');
+  }
+});
+$('stopRec').addEventListener('click', () => {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+  $('recBtn').classList.remove('on');
+  $('recBtn').textContent = '🎙 錄音';
+  $('stopRec').disabled = true;
+});
+
+$('demos').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-demo]');
+  if (!b) return;
+  const seq = DEMOS[b.dataset.demo].map(([midi, beats]) => ({ midi, beats }));
+  const samples = synthMelody(seq, { bpm: 100, sampleRate: 44100 });
+  analyzeSamples(samples, 44100, '示範 ' + b.textContent.replace('示範：', ''));
+});
+
+/* ---------- 顯示 ---------- */
+const DOT = '•';
+function glyph(text, octave, dot, cls = '') {
+  const g = document.createElement('span');
+  g.className = 'glyph ' + cls;
+  const top = document.createElement('span'); top.className = 'oct';
+  const num = document.createElement('span'); num.className = 'num';
+  const bot = document.createElement('span'); bot.className = 'octb';
+  if (octave > 0) top.textContent = DOT.repeat(octave);
+  if (octave < 0) bot.textContent = DOT.repeat(-octave);
+  num.textContent = text + (dot ? '·' : '');
+  g.append(top, num, bot);
+  return g;
+}
+
+function cellEl(c) {
+  const el = document.createElement('span');
+  el.className = 'cell ' + c.kind;
+  // 拍值越長，右邊留越多空位，睇落似真樂譜（--b 由 CSS 換算成 px）
+  el.style.setProperty('--b', c.beats || 0.25);
+  if (c.kind === 'note') {
+    el.appendChild(glyph(c.num, c.octave || 0, !!c.dot));
+    for (let i = 0; i < (c.dashCount || 0); i++) el.appendChild(glyph('–', 0, false, 'hold'));
+  } else if (c.kind === 'rest') {
+    el.appendChild(glyph('0', 0, false));
+    for (let i = 0; i < (c.dashCount || 0); i++) el.appendChild(glyph('–', 0, false, 'hold'));
+  } else {
+    el.appendChild(glyph('–', 0, false, 'hold'));
+  }
+  return el;
+}
+
+function render() {
+  if (!result) return;
+  const r = result;
+  $('hKey').textContent = NOTE_NAMES[r.tonicPc];
+  $('hMeter').textContent = Number($('meter').value) === 6 ? '6 / 8' : `${r.beatsPerBar} / 4`;
+  $('hBpm').textContent = Math.round(r.tempo.bpm);
+  $('hKeyName').textContent = r.key.mode === 'minor' ? `（偵測：${NOTE_NAMES[r.key.originalTonic]} 小調）` : '';
+
+  const wrap = $('measures');
+  wrap.innerHTML = '';
+  r.measures.forEach((m, mi) => {
+    const mv = document.createElement('div');
+    mv.className = 'measure' + (mi === 0 ? ' first' : '');
+    let i = 0;
+    while (i < m.cells.length) {
+      const c = m.cells[i];
+      if (c.under > 0 && c.kind === 'note') {
+        let j = i;
+        while (j < m.cells.length && m.cells[j].under === c.under && m.cells[j].kind === 'note') j++;
+        const g = document.createElement('span');
+        g.className = 'grp u' + c.under;
+        const row = document.createElement('span');
+        row.className = 'rowcells';
+        for (let k = i; k < j; k++) row.appendChild(cellEl(m.cells[k]));
+        g.appendChild(row);
+        mv.appendChild(g);
+        i = j;
+      } else {
+        mv.appendChild(cellEl(c));
+        i++;
+      }
+    }
+    wrap.appendChild(mv);
+  });
+
+  $('fNotes').textContent = `${r.notes.length} 粒音`;
+  $('fBars').textContent = `${r.measures.length} 小節`;
+  $('fDur').textContent = `長 ${r.durationSec.toFixed(1)} 秒`;
+  drawRoll(r);
+}
+
+/* 音高條帶 */
+function drawRoll(r) {
+  const cv = $('roll');
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth, h = 74;
+  cv.width = w * dpr; cv.height = h * dpr;
+  const g = cv.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, w, h);
+  if (!r.notes.length) return;
+  const minM = Math.min(...r.notes.map((n) => n.midi)) - 1;
+  const maxM = Math.max(...r.notes.map((n) => n.midi)) + 1;
+  const t0 = r.notes[0].start, t1 = r.notes[r.notes.length - 1].end;
+  const px = (t) => 6 + ((t - t0) / Math.max(0.001, t1 - t0)) * (w - 12);
+  const py = (m) => h - 8 - ((m - minM) / Math.max(1, maxM - minM)) * (h - 16);
+
+  // 拍線
+  const beatSec = 60 / r.tempo.bpm;
+  g.strokeStyle = '#1b2532'; g.lineWidth = 1;
+  for (let t = 0; t0 + t * beatSec <= t1; t++) {
+    const x = px(t0 + t * beatSec);
+    g.beginPath(); g.moveTo(x, 4); g.lineTo(x, h - 4); g.stroke();
+  }
+  // 音符棒
+  for (const n of r.notes) {
+    const x0 = px(n.start), x1 = px(n.end);
+    const y = py(n.midi);
+    g.fillStyle = Math.abs(n.cents) > 35 ? 'rgba(255,180,84,.85)' : 'rgba(94,224,176,.85)';
+    g.fillRect(x0, y - 3, Math.max(2, x1 - x0 - 1), 6);
+  }
+}
+
+/* ---------- 重新排版（改調 / 拍號 / 速度 / 最小音符） ---------- */
+function reflow() {
+  if (!result) return;
+  const meterVal = Number($('meter').value);
+  result = relayout(result, {
+    tonicPc: Number($('key').value),
+    beatsPerBar: meterVal === 6 ? 3 : meterVal,
+    bpm: Math.max(40, Math.min(220, Number($('bpm').value) || 100)),
+    gridBeats: Number($('grid').value),
+  });
+  render();
+}
+['key', 'meter', 'grid'].forEach((id) => $(id).addEventListener('change', reflow));
+let bpmTimer = null;
+$('bpm').addEventListener('input', () => { clearTimeout(bpmTimer); bpmTimer = setTimeout(reflow, 260); });
+
+/* ---------- 播放 / 匯出 ---------- */
+$('playBtn').addEventListener('click', async () => {
+  if (!result) return;
+  if (playing) { playing.stop(); playing = null; $('playBtn').textContent = '▶ 播放簡譜'; return; }
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  await audioCtx.resume();
+  const seq = result.notes.map((n) => ({ midi: n.midi, beats: n.dur * result.tempo.bpm / 60 }));
+  const sr = audioCtx.sampleRate;
+  const samples = synthMelody(seq, { bpm: result.tempo.bpm, sampleRate: sr, gapSec: 0.02 });
+  const buf = audioCtx.createBuffer(1, samples.length, sr);
+  buf.copyToChannel(samples, 0);
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf; src.connect(audioCtx.destination); src.start();
+  playing = src;
+  $('playBtn').textContent = '■ 停止';
+  src.onended = () => { playing = null; $('playBtn').textContent = '▶ 播放簡譜'; };
+});
+
+$('copyBtn').addEventListener('click', async () => {
+  if (!result) return;
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(result.text);
+    } else {
+      // 非安全來源（例如用手機開內網 IP）就退回落實做法
+      const ta = document.createElement('textarea');
+      ta.value = result.text;
+      ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      if (!ok) throw new Error('execCommand 唔支援');
+    }
+    setStatus('已複製簡譜文字');
+  } catch {
+    setStatus('複製唔到，可以按「下載 .txt」', 'err');
+  }
+});
+$('dlBtn').addEventListener('click', () => {
+  if (!result) return;
+  const blob = new Blob([result.text], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'jianpu.txt';
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+/* ---------- 初始化 ---------- */
+$('key').innerHTML = NOTE_NAMES.map((n, i) => `<option value="${i}">${n}</option>`).join('');
+setStatus('等緊音源… 可以揀檔案、錄音，或者試下示範');
+
+/* ?demo=twinkle|birthday|frere 自動跑示範（分享連結／截圖用） */
+const params = new URLSearchParams(location.search);
+const autoDemo = params.get('demo');
+if (autoDemo && DEMOS[autoDemo]) {
+  const seq = DEMOS[autoDemo].map(([midi, beats]) => ({ midi, beats }));
+  analyzeSamples(synthMelody(seq, { bpm: 100, sampleRate: 44100 }), 44100, '示範');
+}
+if (params.get('bpm')) {
+  const b = Number(params.get('bpm'));
+  if (b >= 40 && b <= 220) $('bpm').value = b;
+}
+</script>
+</body>
+</html>
