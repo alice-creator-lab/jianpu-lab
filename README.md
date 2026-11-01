@@ -1,5 +1,8 @@
 # 聽音成譜 · 音樂 → 簡譜
 
+**線上版：https://alice-creator-lab.github.io/jianpu-lab/**
+（麥克風錄音要 https，Pages 有；用內網 IP 開 http 就只能上傳檔案）
+
 上傳一段單聲部旋律（或直接哼唱），自動偵測音高、定調、估拍速，排成簡譜。
 
 純前端、無依賴、無後端。兩支檔案：`index.html` + `jianpu.js`。
